@@ -26,13 +26,10 @@ import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -169,6 +166,24 @@ public class GallerySearchTask extends AsyncTask<Void, Void, GallerySearchTask.R
             }
         });
 
+        // Log sorted results with folder-date info
+        if (BuildConfig.DEBUG) {
+            Log_OC.d(this, "=== SORTED localFiles (by folder-date then timestamp) ===");
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+            for (OCFile localFile : localFiles) {
+                String path = localFile.getRemotePath();
+                int[] ymd = extractYmdFromPath(path);
+                String folderDateStr = (ymd != null)
+                    ? String.format(Locale.US, "%04d/%02d/%02d", ymd[0], ymd[1], ymd[2])
+                    : "NO_FOLDER_DATE";
+                Log_OC.d(this,
+                         "sorted file: folderDate=" + folderDateStr
+                             + " modified=" + dateFormat.format(new Date(localFile.getModificationTimestamp()))
+                             + " path=" + path);
+            }
+            Log_OC.d(this, "=== END SORTED localFiles ===");
+        }
+
         Map<String, OCFile> localFilesMap = RefreshFolderOperation.prefillLocalFilesMap(null, localFiles);
 
         long filesAdded = 0, filesUpdated = 0, unchangedFiles = 0;
@@ -240,23 +255,6 @@ public class GallerySearchTask extends AsyncTask<Void, Void, GallerySearchTask.R
         }
 
         return filesAdded <= 0 && filesUpdated <= 0 && filesDeleted <= 0;
-    }
-
-    /**
-     * Extract YYYY/MM or YYYY/MM/DD from a file path.
-     * @return int[]{year, month, day} where day=0 if only YYYY/MM present, or null if no match.
-     */
-    private static final Pattern FOLDER_DATE_PATTERN = Pattern.compile("/(\\d{4})/(\\d{1,2})(?:/(\\d{1,2}))?/");
-
-    private static int[] extractYmdFromPath(String path) {
-        Matcher m = FOLDER_DATE_PATTERN.matcher(path);
-        if (m.find()) {
-            int y = Integer.parseInt(m.group(1));
-            int mo = Integer.parseInt(m.group(2));
-            int d = m.group(3) != null ? Integer.parseInt(m.group(3)) : 0;
-            return new int[]{y, mo, d};
-        }
-        return null;
     }
 
     /**

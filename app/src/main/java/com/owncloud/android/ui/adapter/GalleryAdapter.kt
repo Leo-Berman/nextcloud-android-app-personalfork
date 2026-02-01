@@ -43,7 +43,6 @@ import me.zhanghai.android.fastscroll.PopupTextProvider
 import java.util.Calendar
 import java.util.Date
 import java.util.regex.Pattern
-import java.util.regex.Pattern
 
 @Suppress("LongParameterList", "TooManyFunctions")
 class GalleryAdapter(
@@ -61,6 +60,8 @@ class GalleryAdapter(
 
     companion object {
         private const val TAG = "GalleryAdapter"
+        // Pattern to extract YYYY/MM or YYYY/MM/DD from file path
+        private val FOLDER_DATE_PATTERN: Pattern = Pattern.compile("/(\\d{4})/(\\d{1,2})(?:/(\\d{1,2}))?/")
         // Pattern to extract YYYY/MM or YYYY/MM/DD from file path
         private val FOLDER_DATE_PATTERN: Pattern = Pattern.compile("/(\\d{4})/(\\d{1,2})(?:/(\\d{1,2}))?/")
     }
@@ -261,7 +262,6 @@ class GalleryAdapter(
         if (list.isEmpty()) return emptyList()
 
         // List is already sorted by toGalleryItems(), just chunk into rows
-        // List is already sorted by toGalleryItems(), just chunk into rows
         return list
             .chunked(columns)
             .map { chunk -> GalleryRow(chunk, defaultThumbnailSize, defaultThumbnailSize) }
@@ -355,20 +355,20 @@ class GalleryAdapter(
     }
 
     /**
-     * Extract folder date from path (YYYY/MM or YYYY/MM/DD).
-     * @return timestamp or null if no folder date found
+     * Extract the month timestamp from a folder date in the path (YYYY/MM or YYYY/MM/DD).
+     * Returns null if no folder date is found.
      */
-    private fun extractFolderDate(path: String?): Long? {
+    private fun extractFolderDateMonth(path: String?): Long? {
         if (path == null) return null
         val matcher = FOLDER_DATE_PATTERN.matcher(path)
         if (matcher.find()) {
             val year = matcher.group(1)?.toIntOrNull() ?: return null
             val month = matcher.group(2)?.toIntOrNull() ?: return null
-            val day = matcher.group(3)?.toIntOrNull() ?: 1
+            // month in Calendar is 0-based
             return Calendar.getInstance().apply {
                 set(Calendar.YEAR, year)
                 set(Calendar.MONTH, month - 1)
-                set(Calendar.DAY_OF_MONTH, day)
+                set(Calendar.DAY_OF_MONTH, 1)
                 set(Calendar.HOUR_OF_DAY, 0)
                 set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0)
@@ -383,25 +383,23 @@ class GalleryAdapter(
      * otherwise fall back to modification timestamp month.
      */
     private fun getGroupingDate(file: OCFile): Long {
-        return firstOfMonth(extractFolderDate(file.remotePath) ?: file.modificationTimestamp)
+        return extractFolderDateMonth(file.remotePath) ?: firstOfMonth(file.modificationTimestamp)
     }
 
     private fun List<OCFile>.toGalleryItems(): List<GalleryItems> {
         if (isEmpty()) return emptyList()
 
         return groupBy { getGroupingDate(it) }
-        return groupBy { getGroupingDate(it) }
             .map { (date, filesList) ->
-                // Sort files within group: by folder day desc, then by modification timestamp desc
+                // Sort files within group: those with folder-date first (by folder date desc),
+                // then by modification timestamp desc
                 val sortedFiles = filesList.sortedWith { a, b ->
-                    val aFolderDate = extractFolderDate(a.remotePath)
-                    val bFolderDate = extractFolderDate(b.remotePath)
+                    val aFolderDate = extractFolderDateMonth(a.remotePath)
+                    val bFolderDate = extractFolderDateMonth(b.remotePath)
                     when {
                         aFolderDate != null && bFolderDate != null -> {
-                            // Both have folder dates - compare by folder day first (desc)
-                            val dayCompare = bFolderDate.compareTo(aFolderDate)
-                            if (dayCompare != 0) dayCompare
-                            else b.modificationTimestamp.compareTo(a.modificationTimestamp)
+                            // Both have folder dates - compare by modification timestamp within same month
+                            b.modificationTimestamp.compareTo(a.modificationTimestamp)
                         }
                         aFolderDate != null -> -1 // a has folder date, comes first
                         bFolderDate != null -> 1  // b has folder date, comes first

@@ -60,10 +60,33 @@ class GalleryAdapter(
 
     companion object {
         private const val TAG = "GalleryAdapter"
-        // Pattern to extract YYYY/MM or YYYY/MM/DD from file path
-        private val FOLDER_DATE_PATTERN: Pattern = Pattern.compile("/(\\d{4})/(\\d{1,2})(?:/(\\d{1,2}))?/")
-        // Pattern to extract YYYY/MM or YYYY/MM/DD from file path
-        private val FOLDER_DATE_PATTERN: Pattern = Pattern.compile("/(\\d{4})/(\\d{1,2})(?:/(\\d{1,2}))?/")
+        // Pattern to extract YYYY/MM or YYYY/MM/DD from file path (requires zero-padded month/day)
+        private val FOLDER_DATE_PATTERN: Pattern = Pattern.compile("/(\\d{4})/(\\d{2})(?:/(\\d{2}))?/")
+
+        /**
+         * Extract folder date from path (YYYY/MM or YYYY/MM/DD).
+         * @return timestamp or null if no folder date found
+         */
+        @VisibleForTesting
+        fun extractFolderDate(path: String?): Long? {
+            if (path == null) return null
+            val matcher = FOLDER_DATE_PATTERN.matcher(path)
+            if (matcher.find()) {
+                val year = matcher.group(1)?.toIntOrNull() ?: return null
+                val month = matcher.group(2)?.toIntOrNull() ?: return null
+                val day = matcher.group(3)?.toIntOrNull() ?: 1
+                return Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month - 1)
+                    set(Calendar.DAY_OF_MONTH, day)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+            }
+            return null
+        }
     }
 
     // fileId -> (section, row)
@@ -352,30 +375,6 @@ class GalleryAdapter(
             files = allFiles.toGalleryItems()
             notifyItemChanged(file)
         }
-    }
-
-    /**
-     * Extract folder date from path (YYYY/MM or YYYY/MM/DD).
-     * @return timestamp or null if no folder date found
-     */
-    private fun extractFolderDate(path: String?): Long? {
-        if (path == null) return null
-        val matcher = FOLDER_DATE_PATTERN.matcher(path)
-        if (matcher.find()) {
-            val year = matcher.group(1)?.toIntOrNull() ?: return null
-            val month = matcher.group(2)?.toIntOrNull() ?: return null
-            val day = matcher.group(3)?.toIntOrNull() ?: 1
-            return Calendar.getInstance().apply {
-                set(Calendar.YEAR, year)
-                set(Calendar.MONTH, month - 1)
-                set(Calendar.DAY_OF_MONTH, day)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        }
-        return null
     }
 
     /**
